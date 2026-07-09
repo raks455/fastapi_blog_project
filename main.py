@@ -2,7 +2,7 @@ from fastapi import FastAPI,Depends,HTTPException
 from database import engine,SessionLocal
 from sqlalchemy.orm import Session
 import model,schemas
-
+from auth import verify_token,create_access_token
 
 model.Base.metadata.create_all(bind=engine)
 app=FastAPI()
@@ -15,13 +15,19 @@ def get_db():
     finally:
         db.close()
     #home
+    
+@app.post("/login")
+def login():
+    return {"access_token":create_access_token({"user":"admin"}),
+                                        "token_type":"bearer"
+            }
 @app.get("/")
 def home():
     return {"message":"blog api  started"}
 
 #create blog
 @app.post("/blogs",response_model=schemas.BlogResponse)
-def create_blog(blog:schemas.BlogCreate,db:Session=Depends(get_db)):
+def create_blog(blog:schemas.BlogCreate,db:Session=Depends(get_db),user=Depends(verify_token)):
     new_blog=model.Blog(title=blog.title,content=blog.content)
     db.add(new_blog)
     db.commit()
@@ -41,7 +47,7 @@ def getBlog(id:int,db:Session=Depends(get_db)):
     return blog
 
 @app.put("/blogs/{id}",response_model=schemas.BlogResponse)
-def updateBlog(id:int,blog:schemas.BlogCreate,db:Session=Depends(get_db)):
+def updateBlog(id:int,blog:schemas.BlogCreate,db:Session=Depends(get_db),user=Depends(verify_token)):
     existing_blog=db.query(model.Blog).filter(model.Blog.id==id).first()
     if not existing_blog:
         raise HTTPException(status_code=404,detail=f"blog with id {id} not found")
@@ -51,7 +57,7 @@ def updateBlog(id:int,blog:schemas.BlogCreate,db:Session=Depends(get_db)):
     return existing_blog
 
 @app.delete("/blogs/{id}",response_model=schemas.BlogResponse)
-def deleteBlog(id:int,db:Session=Depends(get_db)):
+def deleteBlog(id:int,db:Session=Depends(get_db),user=Depends(verify_token)):
     blog=db.query(model.Blog).filter(model.Blog.id==id).first()
     if not blog:
         raise HTTPException(status_code=404,detail=f"blog with id {id} not found")
